@@ -1,4 +1,4 @@
-# Git Multi-Agent Management System
+# Multiple AI Agents for GIT Management System
 
 **Author:** Chong Kiat Lim
 
