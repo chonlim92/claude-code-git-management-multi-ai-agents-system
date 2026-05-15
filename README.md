@@ -125,66 +125,57 @@ In a Claude Code session, invoke skills with the `/` prefix:
 
 ## System Flow Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              USER REQUEST                                        │
-└─────────────────────────────────┬───────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          @git-orchestrator                                       │
-│                                                                                 │
-│  1. Reads git-lessons-learned.md                                                │
-│  2. Analyzes request type                                                       │
-│  3. Routes to specialist agent                                                  │
-│  4. Ensures report is generated                                                 │
-└───────┬──────────────────────┬──────────────────────┬───────────────────────────┘
-        │                      │                      │
-        ▼                      ▼                      ▼
-┌───────────────┐  ┌───────────────────┐  ┌──────────────────────┐
-│@git-repo-     │  │@git-sync-         │  │@git-merge-           │
-│  manager      │  │  manager           │  │  manager             │
-│               │  │                    │  │                      │
-│ Skills:       │  │ Skills:            │  │ Skills:              │
-│ /git-repo-    │  │ /git-pull          │  │ /git-pull-request    │
-│   create      │  │ /git-push          │  │ /git-merge-request   │
-│ /git-clone    │  │ /git-branch-       │  │ /git-conflict-       │
-│               │  │   protection       │  │   analysis           │
-│               │  │                    │  │ /git-branch-         │
-│               │  │                    │  │   protection         │
-└───────┬───────┘  └────────┬───────────┘  └──────────┬───────────┘
-        │                   │                          │
-        └───────────────────┼──────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                            @git-reviewer                                         │
-│                                                                                 │
-│  Skills: /git-action-report, /git-feedback-learning                             │
-│                                                                                 │
-│  1. Generates structured report for every action                                │
-│  2. Presents HITL decisions to human (APPROVE / REJECT / REVISE)                │
-│  3. Processes feedback into rules                                               │
-└───────────────────────────────┬─────────────────────────────────────────────────┘
-                                │
-                ┌───────────────┼───────────────┐
-                ▼               ▼               ▼
-        ┌──────────┐    ┌─────────────┐   ┌──────────────┐
-        │  REPORT  │    │   HUMAN     │   │  FEEDBACK    │
-        │  OUTPUT  │    │  DECISION   │   │  LEARNING    │
-        │          │    │             │   │              │
-        │ Shown to │    │ APPROVE /   │   │ Writes to:   │
-        │ user     │    │ REJECT /    │   │ • lessons-   │
-        │          │    │ REVISE      │   │   learned.md │
-        └──────────┘    └──────┬──────┘   │ • Claude     │
-                               │          │   memory     │
-                               ▼          └──────────────┘
-                ┌──────────────────────────────┐
-                │     git-lessons-learned.md   │
-                │                              │
-                │  Read by ALL agents before   │
-                │  every operation             │
-                └──────────────────────────────┘
+```mermaid
+flowchart TD
+    USER(["🧑‍💻 USER REQUEST"])
+    USER --> ORCH
+
+    subgraph ORCH_BOX ["@git-orchestrator"]
+        ORCH["1. Reads git-lessons-learned.md\n2. Analyzes request type\n3. Routes to specialist agent\n4. Ensures report is generated"]
+    end
+
+    ORCH --> REPO
+    ORCH --> SYNC
+    ORCH --> MERGE
+
+    subgraph REPO_BOX ["@git-repo-manager"]
+        REPO["Skills:\n/git-repo-create\n/git-clone"]
+    end
+
+    subgraph SYNC_BOX ["@git-sync-manager"]
+        SYNC["Skills:\n/git-pull\n/git-push\n/git-branch-protection"]
+    end
+
+    subgraph MERGE_BOX ["@git-merge-manager"]
+        MERGE["Skills:\n/git-pull-request\n/git-merge-request\n/git-conflict-analysis\n/git-branch-protection"]
+    end
+
+    REPO --> REVIEWER
+    SYNC --> REVIEWER
+    MERGE --> REVIEWER
+
+    subgraph REVIEW_BOX ["@git-reviewer"]
+        REVIEWER["Skills: /git-action-report, /git-feedback-learning\n\n1. Generates structured report for every action\n2. Presents HITL decisions to human\n3. Processes feedback into rules"]
+    end
+
+    REVIEWER --> REPORT["📄 REPORT OUTPUT\nShown to user"]
+    REVIEWER --> DECISION["🧑‍⚖️ HUMAN DECISION\nAPPROVE / REJECT / REVISE"]
+    REVIEWER --> FEEDBACK["🧠 FEEDBACK LEARNING\nWrites to lessons-learned.md\n& Claude memory"]
+
+    DECISION --> LESSONS[("📚 git-lessons-learned.md\n\nRead by ALL agents\nbefore every operation")]
+    FEEDBACK --> LESSONS
+    LESSONS -.->|"feeds back into"| ORCH
+
+    style USER fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style ORCH_BOX fill:#2D2D2D,stroke:#4A90D9,color:#fff
+    style REPO_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style SYNC_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style MERGE_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style REVIEW_BOX fill:#2D2D2D,stroke:#E67E22,color:#fff
+    style REPORT fill:#1A1A2E,stroke:#16A085,color:#fff
+    style DECISION fill:#1A1A2E,stroke:#E74C3C,color:#fff
+    style FEEDBACK fill:#1A1A2E,stroke:#9B59B6,color:#fff
+    style LESSONS fill:#1A1A2E,stroke:#F39C12,color:#fff
 ```
 
 See [docs/git-agent-system.md](docs/git-agent-system.md) for detailed operation flows and design decisions.
@@ -193,35 +184,45 @@ See [docs/git-agent-system.md](docs/git-agent-system.md) for detailed operation 
 
 ### Flow: Creating a Pull Request
 
-```
-User: "Create PR from feature to main"
-  │
-  ▼
-@git-orchestrator → routes to @git-merge-manager
-  │
-  ▼
-@git-merge-manager:
-  1. Reads git-lessons-learned.md
-  2. Runs /git-branch-protection (checks main is safe)
-  3. Runs /git-conflict-analysis (detects conflicts)
-  4. Runs /git-pull-request (creates the PR)
-  5. Compiles analysis report
-  │
-  ▼
-@git-reviewer:
-  - Formats the analysis for human review
-  - Presents: changes, conflicts, risk, recommendation
-  - WAITS for human decision (APPROVE / REJECT / REVISE)
-  │
-  ▼
-Human decides → If rejected with comments:
-  │
-  ▼
-@git-reviewer → /git-feedback-learning:
-  - Parses feedback into a rule
-  - Writes to git-lessons-learned.md
-  - Saves to Claude memory
-  - Applies immediately
+```mermaid
+flowchart TD
+    A(["🧑‍💻 User: Create PR from feature to main"]) --> B
+
+    subgraph B_BOX ["@git-orchestrator"]
+        B["Routes to @git-merge-manager"]
+    end
+
+    B --> C
+
+    subgraph C_BOX ["@git-merge-manager"]
+        C["1. Reads git-lessons-learned.md\n2. /git-branch-protection — checks main is safe\n3. /git-conflict-analysis — detects conflicts\n4. /git-pull-request — creates the PR\n5. Compiles analysis report"]
+    end
+
+    C --> D
+
+    subgraph D_BOX ["@git-reviewer"]
+        D["Formats analysis for human review\nPresents: changes, conflicts, risk, recommendation\nWAITS for human decision"]
+    end
+
+    D --> E{"🧑‍⚖️ Human Decision"}
+    E -->|"✅ APPROVE"| F["Merge proceeds"]
+    E -->|"❌ REJECT"| G
+    E -->|"🔄 REVISE"| H["Agent adapts & re-submits"]
+
+    subgraph G_BOX ["/git-feedback-learning"]
+        G["Parses feedback into a rule\nWrites to git-lessons-learned.md\nSaves to Claude memory\nApplies immediately"]
+    end
+
+    H --> C
+
+    style A fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style B_BOX fill:#2D2D2D,stroke:#4A90D9,color:#fff
+    style C_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style D_BOX fill:#2D2D2D,stroke:#E67E22,color:#fff
+    style E fill:#1A1A2E,stroke:#E74C3C,color:#fff
+    style F fill:#1A1A2E,stroke:#27AE60,color:#fff
+    style G_BOX fill:#2D2D2D,stroke:#9B59B6,color:#fff
+    style H fill:#1A1A2E,stroke:#F39C12,color:#fff
 ```
 
 ### Learning System

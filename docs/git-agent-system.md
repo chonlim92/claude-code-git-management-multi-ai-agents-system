@@ -8,269 +8,266 @@ This document describes the architecture, flow, and relationships of the git mul
 
 ## System Flow Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              USER REQUEST                                        │
-└─────────────────────────────────┬───────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          @git-orchestrator                                       │
-│                                                                                 │
-│  1. Reads git-lessons-learned.md                                                │
-│  2. Analyzes request type                                                       │
-│  3. Routes to specialist agent                                                  │
-│  4. Ensures report is generated                                                 │
-└───────┬──────────────────────┬──────────────────────┬───────────────────────────┘
-        │                      │                      │
-        ▼                      ▼                      ▼
-┌───────────────┐  ┌───────────────────┐  ┌──────────────────────┐
-│@git-repo-     │  │@git-sync-         │  │@git-merge-           │
-│  manager      │  │  manager           │  │  manager             │
-│               │  │                    │  │                      │
-│ Skills:       │  │ Skills:            │  │ Skills:              │
-│ /git-repo-    │  │ /git-pull          │  │ /git-pull-request    │
-│   create      │  │ /git-push          │  │ /git-merge-request   │
-│ /git-clone    │  │ /git-branch-       │  │ /git-conflict-       │
-│               │  │   protection       │  │   analysis           │
-│               │  │                    │  │ /git-branch-         │
-│               │  │                    │  │   protection         │
-└───────┬───────┘  └────────┬───────────┘  └──────────┬───────────┘
-        │                   │                          │
-        │                   │                          │
-        └───────────────────┼──────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                            @git-reviewer                                         │
-│                                                                                 │
-│  Skills: /git-action-report, /git-feedback-learning                             │
-│                                                                                 │
-│  1. Generates structured report for every action                                │
-│  2. Presents HITL decisions to human (APPROVE / REJECT / REVISE)                │
-│  3. Processes feedback into rules                                               │
-└───────────────────────────────┬─────────────────────────────────────────────────┘
-                                │
-                ┌───────────────┼───────────────┐
-                ▼               ▼               ▼
-        ┌──────────┐    ┌─────────────┐   ┌──────────────┐
-        │  REPORT  │    │   HUMAN     │   │  FEEDBACK    │
-        │  OUTPUT  │    │  DECISION   │   │  LEARNING    │
-        │          │    │             │   │              │
-        │ Shown to │    │ APPROVE /   │   │ Writes to:   │
-        │ user     │    │ REJECT /    │   │ • lessons-   │
-        │          │    │ REVISE      │   │   learned.md │
-        └──────────┘    └──────┬──────┘   │ • Claude     │
-                               │          │   memory     │
-                               │          └──────────────┘
-                               ▼
-                ┌──────────────────────────────┐
-                │     git-lessons-learned.md   │
-                │                              │
-                │  Read by ALL agents before   │
-                │  every operation             │
-                │                              │
-                │  Rules accumulate over time  │
-                │  from human feedback         │
-                └──────────────────────────────┘
+```mermaid
+flowchart TD
+    USER(["🧑‍💻 USER REQUEST"])
+    USER --> ORCH
+
+    subgraph ORCH_BOX ["@git-orchestrator"]
+        ORCH["1. Reads git-lessons-learned.md\n2. Analyzes request type\n3. Routes to specialist agent\n4. Ensures report is generated"]
+    end
+
+    ORCH --> REPO
+    ORCH --> SYNC
+    ORCH --> MERGE
+
+    subgraph REPO_BOX ["@git-repo-manager"]
+        REPO["Skills:\n/git-repo-create\n/git-clone"]
+    end
+
+    subgraph SYNC_BOX ["@git-sync-manager"]
+        SYNC["Skills:\n/git-pull\n/git-push\n/git-branch-protection"]
+    end
+
+    subgraph MERGE_BOX ["@git-merge-manager"]
+        MERGE["Skills:\n/git-pull-request\n/git-merge-request\n/git-conflict-analysis\n/git-branch-protection"]
+    end
+
+    REPO --> REVIEWER
+    SYNC --> REVIEWER
+    MERGE --> REVIEWER
+
+    subgraph REVIEW_BOX ["@git-reviewer"]
+        REVIEWER["Skills: /git-action-report, /git-feedback-learning\n\n1. Generates structured report for every action\n2. Presents HITL decisions to human\n3. Processes feedback into rules"]
+    end
+
+    REVIEWER --> REPORT["📄 REPORT OUTPUT\nShown to user"]
+    REVIEWER --> DECISION["🧑‍⚖️ HUMAN DECISION\nAPPROVE / REJECT / REVISE"]
+    REVIEWER --> FEEDBACK["🧠 FEEDBACK LEARNING\nWrites to lessons-learned.md\n& Claude memory"]
+
+    DECISION --> LESSONS[("📚 git-lessons-learned.md\n\nRead by ALL agents\nbefore every operation\n\nRules accumulate over time\nfrom human feedback")]
+    FEEDBACK --> LESSONS
+    LESSONS -.->|"feeds back into"| ORCH
+
+    style USER fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style ORCH_BOX fill:#2D2D2D,stroke:#4A90D9,color:#fff
+    style REPO_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style SYNC_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style MERGE_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style REVIEW_BOX fill:#2D2D2D,stroke:#E67E22,color:#fff
+    style REPORT fill:#1A1A2E,stroke:#16A085,color:#fff
+    style DECISION fill:#1A1A2E,stroke:#E74C3C,color:#fff
+    style FEEDBACK fill:#1A1A2E,stroke:#9B59B6,color:#fff
+    style LESSONS fill:#1A1A2E,stroke:#F39C12,color:#fff
 ```
 
 ## Agent Relationships
 
+```mermaid
+flowchart LR
+    subgraph DELEGATION ["Agent Delegation Map"]
+        direction TB
+        ORCH["@git-orchestrator"] --> REPO_MGR["@git-repo-manager"]
+        ORCH --> SYNC_MGR["@git-sync-manager"]
+        ORCH --> MERGE_MGR["@git-merge-manager"]
+        ORCH --> REVIEWER["@git-reviewer"]
+        MERGE_MGR -.-> REVIEWER
+    end
+
+    style ORCH fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style REPO_MGR fill:#27AE60,stroke:#1E8449,color:#fff
+    style SYNC_MGR fill:#27AE60,stroke:#1E8449,color:#fff
+    style MERGE_MGR fill:#27AE60,stroke:#1E8449,color:#fff
+    style REVIEWER fill:#E67E22,stroke:#CA6F1E,color:#fff
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                    AGENT DELEGATION MAP                       │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  @git-orchestrator ──┬──► @git-repo-manager                  │
-│                      ├──► @git-sync-manager                  │
-│                      ├──► @git-merge-manager ──► @git-reviewer│
-│                      └──► @git-reviewer                      │
-│                                                              │
-├──────────────────────────────────────────────────────────────┤
-│                    SKILL OWNERSHIP MAP                        │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  @git-repo-manager:                                          │
-│    ├── /git-repo-create                                      │
-│    ├── /git-clone                                            │
-│    └── /git-release                                          │
-│                                                              │
-│  @git-sync-manager:                                          │
-│    ├── /git-pull                                             │
-│    ├── /git-push                                             │
-│    └── /git-branch-protection                                │
-│                                                              │
-│  @git-merge-manager:                                         │
-│    ├── /git-pull-request                                     │
-│    ├── /git-merge-request                                    │
-│    ├── /git-conflict-analysis                                │
-│    └── /git-branch-protection (shared)                       │
-│                                                              │
-│  @git-reviewer:                                              │
-│    ├── /git-action-report                                    │
-│    ├── /git-feedback-learning                                │
-│    └── /git-sync-docs                                        │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+
+```mermaid
+flowchart LR
+    subgraph SKILLS ["Skill Ownership Map"]
+        direction TB
+
+        subgraph REPO_S ["@git-repo-manager"]
+            S1["/git-repo-create"]
+            S2["/git-clone"]
+            S3["/git-release"]
+        end
+
+        subgraph SYNC_S ["@git-sync-manager"]
+            S4["/git-pull"]
+            S5["/git-push"]
+            S6["/git-branch-protection"]
+        end
+
+        subgraph MERGE_S ["@git-merge-manager"]
+            S7["/git-pull-request"]
+            S8["/git-merge-request"]
+            S9["/git-conflict-analysis"]
+            S10["/git-branch-protection \n(shared)"]
+        end
+
+        subgraph REVIEW_S ["@git-reviewer"]
+            S11["/git-action-report"]
+            S12["/git-feedback-learning"]
+            S13["/git-sync-docs"]
+        end
+    end
+
+    style REPO_S fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style SYNC_S fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style MERGE_S fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style REVIEW_S fill:#2D2D2D,stroke:#E67E22,color:#fff
 ```
 
 ## Operation Flows
 
 ### Flow 1: Repository Creation
 
-```
-User: "Create a repo"
-  │
-  ▼
-@git-orchestrator
-  │ routes to
-  ▼
-@git-repo-manager
-  │ runs /git-repo-create
-  │   → Asks: name, platform, visibility
-  │   → Creates repo via MCP (GitHub) or API (GitLab)
-  │
-  ▼
-@git-reviewer
-  │ runs /git-action-report
-  │   → Generates report: repo URL, settings, status
-  │
-  ▼
-Report shown to user
+```mermaid
+flowchart TD
+    A(["🧑‍💻 User: Create a repo"]) --> B
+
+    subgraph B_BOX ["@git-orchestrator"]
+        B["Routes to @git-repo-manager"]
+    end
+
+    B --> C
+
+    subgraph C_BOX ["@git-repo-manager"]
+        C["/git-repo-create\n→ Asks: name, platform, visibility\n→ Creates repo via MCP or API"]
+    end
+
+    C --> D
+
+    subgraph D_BOX ["@git-reviewer"]
+        D["/git-action-report\n→ Generates report: repo URL, settings, status"]
+    end
+
+    D --> E["📄 Report shown to user"]
+
+    style A fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style B_BOX fill:#2D2D2D,stroke:#4A90D9,color:#fff
+    style C_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style D_BOX fill:#2D2D2D,stroke:#E67E22,color:#fff
+    style E fill:#1A1A2E,stroke:#16A085,color:#fff
 ```
 
 ### Flow 2: Pull with Conflict Detection
 
-```
-User: "Pull latest from main"
-  │
-  ▼
-@git-orchestrator
-  │ routes to
-  ▼
-@git-sync-manager
-  │ runs /git-pull
-  │   → Checks for uncommitted changes (stash if needed)
-  │   → Fetches remote
-  │   → Detects diverged history?
-  │       ├── NO → pulls cleanly
-  │       └── YES → STOPS
-  │                   │
-  │                   ▼
-  │           runs /git-conflict-analysis
-  │                   │
-  │                   ▼
-  │           @git-reviewer presents conflicts to human
-  │                   │
-  │                   ▼
-  │           Human decides how to resolve
-  │
-  ▼
-@git-reviewer
-  │ runs /git-action-report
-  ▼
-Report shown to user
+```mermaid
+flowchart TD
+    A(["🧑‍💻 User: Pull latest from main"]) --> B
+
+    subgraph B_BOX ["@git-orchestrator"]
+        B["Routes to @git-sync-manager"]
+    end
+
+    B --> C
+
+    subgraph C_BOX ["@git-sync-manager"]
+        C["/git-pull\n→ Checks for uncommitted changes\n→ Stash if needed\n→ Fetches remote"]
+    end
+
+    C --> D{"Diverged history?"}
+    D -->|"✅ NO"| E["Pulls cleanly"]
+    D -->|"⚠️ YES"| F
+
+    subgraph F_BOX ["Conflict Resolution"]
+        F["/git-conflict-analysis"]
+        F --> G["@git-reviewer presents\nconflicts to human"]
+        G --> H{"🧑‍⚖️ Human decides\nhow to resolve"}
+    end
+
+    E --> I
+    H --> I
+
+    subgraph I_BOX ["@git-reviewer"]
+        I["/git-action-report"]
+    end
+
+    I --> J["📄 Report shown to user"]
+
+    style A fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style B_BOX fill:#2D2D2D,stroke:#4A90D9,color:#fff
+    style C_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style D fill:#1A1A2E,stroke:#F39C12,color:#fff
+    style E fill:#1A1A2E,stroke:#27AE60,color:#fff
+    style F_BOX fill:#2D2D2D,stroke:#E74C3C,color:#fff
+    style H fill:#1A1A2E,stroke:#E74C3C,color:#fff
+    style I_BOX fill:#2D2D2D,stroke:#E67E22,color:#fff
+    style J fill:#1A1A2E,stroke:#16A085,color:#fff
 ```
 
 ### Flow 3: Pull Request with HITL
 
-```
-User: "Create PR from feature to main"
-  │
-  ▼
-@git-orchestrator
-  │ routes to
-  ▼
-@git-merge-manager
-  │
-  ├── runs /git-branch-protection
-  │     → Checks main is clean and up-to-date
-  │     → Checks feature branch is based on current main
-  │
-  ├── runs /git-conflict-analysis
-  │     → Detects conflicts between feature and main
-  │     → Classifies: trivial / logic / structural / dependency
-  │     → Suggests resolutions
-  │
-  ├── runs /git-pull-request
-  │     → Creates PR via GitHub MCP
-  │     → Does NOT auto-merge
-  │
-  └── Compiles full analysis
-        │
-        ▼
-@git-reviewer
-  │
-  ├── runs /git-action-report (PR creation report)
-  │
-  └── Presents HITL decision:
-        ┌─────────────────────────────────┐
-        │   HUMAN DECISION REQUIRED       │
-        │                                 │
-        │   Changes: [summary]            │
-        │   Conflicts: [list or "None"]   │
-        │   Risk: [Low/Medium/High]       │
-        │   Recommendation: [action]      │
-        │                                 │
-        │   → APPROVE                     │
-        │   → REJECT (with comments)      │
-        │   → REVISE (request changes)    │
-        └────────────────┬────────────────┘
-                         │
-            ┌────────────┼────────────┐
-            ▼            ▼            ▼
-        APPROVE       REJECT       REVISE
-            │            │            │
-            │            ▼            │
-            │   /git-feedback-        │
-            │     learning            │
-            │       │                 │
-            │       ├── Parse feedback│
-            │       ├── Write rule    │
-            │       ├── Save memory   │
-            │       └── Apply now     │
-            │                         │
-            ▼                         ▼
-        Merge proceeds         Agent adapts and
-                               re-submits
+```mermaid
+flowchart TD
+    A(["🧑‍💻 User: Create PR from feature to main"]) --> B
+
+    subgraph B_BOX ["@git-orchestrator"]
+        B["Routes to @git-merge-manager"]
+    end
+
+    B --> C
+
+    subgraph C_BOX ["@git-merge-manager"]
+        C1["/git-branch-protection\nChecks main is clean & up-to-date"]
+        C1 --> C2["/git-conflict-analysis\nDetects & classifies conflicts:\ntrivial / logic / structural / dependency"]
+        C2 --> C3["/git-pull-request\nCreates PR via GitHub MCP\nDoes NOT auto-merge"]
+        C3 --> C4["Compiles full analysis"]
+    end
+
+    C4 --> D
+
+    subgraph D_BOX ["@git-reviewer"]
+        D["/git-action-report\nPR creation report"]
+        D --> E["Presents HITL Decision:\n\nChanges: summary\nConflicts: list or None\nRisk: Low/Medium/High\nRecommendation: action"]
+    end
+
+    E --> F{"🧑‍⚖️ HUMAN DECISION"}
+    F -->|"✅ APPROVE"| G["Merge proceeds"]
+    F -->|"❌ REJECT"| H
+    F -->|"🔄 REVISE"| I["Agent adapts &\nre-submits"]
+
+    subgraph H_BOX ["/git-feedback-learning"]
+        H["Parse feedback\n→ Write rule\n→ Save to memory\n→ Apply now"]
+    end
+
+    I --> C1
+
+    style A fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style B_BOX fill:#2D2D2D,stroke:#4A90D9,color:#fff
+    style C_BOX fill:#2D2D2D,stroke:#27AE60,color:#fff
+    style D_BOX fill:#2D2D2D,stroke:#E67E22,color:#fff
+    style F fill:#1A1A2E,stroke:#E74C3C,color:#fff
+    style G fill:#1A1A2E,stroke:#27AE60,color:#fff
+    style H_BOX fill:#2D2D2D,stroke:#9B59B6,color:#fff
+    style I fill:#1A1A2E,stroke:#F39C12,color:#fff
 ```
 
 ### Flow 4: Feedback Learning Cycle
 
-```
-Human rejects or comments
-  │
-  ▼
-@git-reviewer runs /git-feedback-learning
-  │
-  ├── Step 1: PARSE
-  │     What was wrong? What should change?
-  │
-  ├── Step 2: FORMULATE
-  │     WHEN: [trigger condition]
-  │     DO/DO NOT: [required behavior]
-  │     BECAUSE: [reason from feedback]
-  │
-  ├── Step 3: STORE (shared)
-  │     Append rule to .claude/git-lessons-learned.md
-  │
-  ├── Step 4: STORE (personal)
-  │     Save to Claude memory system
-  │
-  ├── Step 5: APPLY
-  │     Fix current task using the new rule
-  │
-  └── Step 6: REPORT
-        What was learned, rule created, impact
-          │
-          ▼
-    ┌─────────────────────────────────────┐
-    │   Future operations:                │
-    │   ALL agents read lessons-learned   │
-    │   BEFORE every action               │
-    │   → Rule is applied automatically   │
-    └─────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A(["❌ Human rejects or comments"]) --> B
+
+    subgraph B_BOX ["@git-reviewer → /git-feedback-learning"]
+        B["Step 1: PARSE\nWhat was wrong? What should change?"] --> C
+        C["Step 2: FORMULATE\nWHEN: trigger condition\nDO/DO NOT: required behavior\nBECAUSE: reason from feedback"] --> D
+        D["Step 3: STORE shared\nAppend rule to\n.claude/git-lessons-learned.md"] --> E
+        E["Step 4: STORE personal\nSave to Claude memory system"] --> F
+        F["Step 5: APPLY\nFix current task using the new rule"] --> G
+        G["Step 6: REPORT\nWhat was learned, rule created, impact"]
+    end
+
+    G --> H
+
+    subgraph H_BOX ["🔁 Future Operations"]
+        H["ALL agents read lessons-learned\nBEFORE every action\n→ Rule is applied automatically"]
+    end
+
+    style A fill:#E74C3C,stroke:#C0392B,color:#fff
+    style B_BOX fill:#2D2D2D,stroke:#9B59B6,color:#fff
+    style H_BOX fill:#2D2D2D,stroke:#F39C12,color:#fff
 ```
 
 ## Shared Resources
