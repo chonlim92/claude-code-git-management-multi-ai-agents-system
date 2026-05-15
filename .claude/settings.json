@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath // \"\"' | { read -r f; if echo \"$f\" | grep -qE '\\.claude/(agents|skills)/'; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"IMPORTANT: A file in .claude/agents/ or .claude/skills/ was just modified. You MUST run /git-sync-docs to update README.md, AGENTS.md, CLAUDE.md, and docs/git-agent-system.md to reflect the current agents and skills.\"}}'; fi; }",
+            "timeout": 5,
+            "statusMessage": "Checking if docs sync needed..."
+          }
+        ]
+      }
+    ]
+  }
+}
